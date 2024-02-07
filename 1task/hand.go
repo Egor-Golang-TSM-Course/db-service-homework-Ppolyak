@@ -2,62 +2,20 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"github.com/gorilla/mux"
-	"gorm.io/gorm"
+	_ "github.com/jmoiron/sqlx"
 	"io"
+	_ "io/ioutil"
+	"log"
 	"net/http"
 )
 
 func registerUser(w http.ResponseWriter, r *http.Request) {
 	var user User
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusInternalServerError)
 		return
 	}
-
-	if err := json.Unmarshal(body, &user); err != nil {
-		http.Error(w, "Error while decoding JSON", http.StatusBadRequest)
-		return
-	}
-
-	if user.Username == "" {
-		http.Error(w, "Missing username in JSON", http.StatusBadRequest)
-		return
-	}
-
-	if user.Password == "" {
-		http.Error(w, "Missing username in JSON", http.StatusBadRequest)
-		return
-	}
-
-	if len(user.Username) < 5 {
-		http.Error(w, "Username must be at least 5 characters long", http.StatusBadRequest)
-		return
-	}
-
-	db.Create(&user)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(user); err != nil {
-		http.Error(w, "Error while encoding JSON", http.StatusInternalServerError)
-	}
-
-	/*generateToken(user, "secret")*/
-}
-
-func loginUser(w http.ResponseWriter, r *http.Request) {
-	var user User
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusInternalServerError)
-		return
-	}
-
 	defer r.Body.Close()
 
 	if err := json.Unmarshal(body, &user); err != nil {
@@ -65,43 +23,61 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if trimmedUsername := user.Username; trimmedUsername == "" || user.Password == "" {
-		http.Error(w, "Username and Password cannot be empty", http.StatusBadRequest)
+	if user.Username == "" || user.Password == "" {
+		http.Error(w, "Username and password cannot be empty", http.StatusBadRequest)
 		return
 	}
 
-	var logUser User
-	if err := db.Where("username = ?", user.Username).First(&logUser).Error; err != nil {
+	db.MustExec("INSERT INTO users (username, password) VALUES ($1, $2)", user.Username, user.Password)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(user)
+}
+
+func loginUser(w http.ResponseWriter, r *http.Request) {
+	var user User
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+	if err := json.Unmarshal(body, &user); err != nil {
+		http.Error(w, "Error while decoding JSON", http.StatusBadRequest)
+		return
+	}
+
+	if user.Username == "" || user.Password == "" {
+		http.Error(w, "Username and password cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	err = db.Get(&user, "SELECT id, username FROM users WHERE username = $1 AND password = $2", user.Username, user.Password)
+	if err != nil {
 		http.Error(w, "Invalid login or password", http.StatusUnauthorized)
 		return
 	}
 
-	if logUser.Password != user.Password {
-		http.Error(w, "Invalid login or password", http.StatusUnauthorized)
-		return
-	}
-
-	token, err := generateToken(logUser, "your_secret_key")
+	token, err := generateToken(user)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
 	}
 
-	logUser.Token = token
+	user.Token = token
 
-	session := SessionStorage{
-		UserID: logUser.ID,
-		Token:  token,
+	_, err = db.Exec("INSERT INTO session_storage (user_id, token) VALUES ($1, $2)", user.ID, user.Token)
+	if err != nil {
+		log.Println("Error updating session storage:", err)
+		http.Error(w, "Error updating session storage", http.StatusInternalServerError)
+		return
 	}
-	db.Create(&session)
-
-	db.Save(&logUser)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(logUser); err != nil {
-		http.Error(w, "Error while encoding JSON", http.StatusInternalServerError)
-	}
+	json.NewEncoder(w).Encode(user)
 }
 
 func createPost(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +87,6 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error reading request body", http.StatusInternalServerError)
 		return
 	}
-
 	defer r.Body.Close()
 
 	if err := json.Unmarshal(body, &post); err != nil {
@@ -121,9 +96,12 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 
 	user, err := authenticateUser(r)
 	if err != nil {
+		log.Println("Authentication failed:", err) // Логирование ошибки аутентификации
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
+
+	log.Println("Authenticated user:", user.ID) // Логирование идентификатора аутентифицированного пользователя
 
 	post.UserID = user.ID
 
@@ -132,16 +110,22 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.Create(&post)
+	_, err = db.Exec("INSERT INTO posts (title, content, user_id) VALUES ($1, $2, $3)", post.Title, post.Content, post.UserID)
+	if err != nil {
+		log.Println("Error creating post:", err) // Логирование ошибки создания поста
+		http.Error(w, "Error creating post", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(post); err != nil {
+		log.Println("Error encoding JSON:", err) // Логирование ошибки кодирования JSON
 		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 	}
-
 }
 
-func getAllPosts(w http.ResponseWriter, r *http.Request) {
+/*func getAllPosts(w http.ResponseWriter, r *http.Request) {
 	user, err := authenticateUser(r)
 	if err != nil {
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
@@ -247,4 +231,4 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 	}
 
-}
+}*/
