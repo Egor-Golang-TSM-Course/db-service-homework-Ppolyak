@@ -26,7 +26,7 @@ func main() {
 	r.HandleFunc("/posts/{id}", AuthMiddleware(DeletePost)).Methods("DELETE")
 	//POST /posts/{postId}/comments
 	r.HandleFunc("/posts/{id}/comments", AuthMiddleware(AddCommentToPost)).Methods("POST")
-	r.HandleFunc("/posts/{id}/comments", AuthMiddleware(GetComments)).Methods("GET")
+	r.HandleFunc("/posts/{id}/comments", GetComments).Methods("GET")
 	port := ":6262"
 	fmt.Printf("Сервер запущен на порту %s...\n", port)
 

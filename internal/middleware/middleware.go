@@ -1,7 +1,8 @@
 package middleware
 
 import (
-	"awesomeProject15/db-service-homework-Ppolyak/internal"
+	. "awesomeProject15/db-service-homework-Ppolyak/internal/database"
+	. "awesomeProject15/db-service-homework-Ppolyak/internal/models"
 	"context"
 	"github.com/dgrijalva/jwt-go"
 	"net/http"
@@ -32,15 +33,15 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		userID := int(sub)
 
-		var session internal.SessionStorage
-		err = internal.Db.Get(&session, "SELECT * FROM session_storage WHERE user_id = $1", userID)
+		var session SessionStorage
+		err = Db.Get(&session, "SELECT * FROM session_storage WHERE user_id = $1", userID)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		var user internal.User
-		err = internal.Db.Get(&user, "SELECT * FROM users WHERE id = $1", session.UserID)
+		var user User
+		err = Db.Get(&user, "SELECT * FROM users WHERE id = $1", session.UserID)
 		if err != nil {
 			http.Error(w, "User not found", http.StatusUnauthorized)
 			return

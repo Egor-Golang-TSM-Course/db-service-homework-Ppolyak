@@ -1,7 +1,7 @@
 package utils
 
 import (
-	. "awesomeProject15/db-service-homework-Ppolyak/internal/database"
+	. "awesomeProject15/db-service-homework-Ppolyak/internal/models"
 	"github.com/dgrijalva/jwt-go"
 	"time"
 )
