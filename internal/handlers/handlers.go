@@ -136,7 +136,7 @@ func GetAllPosts(w http.ResponseWriter, r *http.Request) {
 	err := Db.Select(&post, "SELECT * FROM posts WHERE user_id = $1", user.ID)
 	log.Println(user.ID)
 	if err != nil {
-		log.Println("Error while getting all posts:", err) // Логирование ошибки создания поста
+		log.Println("Error while getting all posts:", err)
 		http.Error(w, "Error creating post", http.StatusInternalServerError)
 		return
 	}
@@ -311,7 +311,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 	}
 	var comment []Comment
 
-	_, err := Db.Exec("SELECT * FROM comments WHERE post_id = $1", postId)
+	err := Db.Select("SELECT * FROM comments WHERE post_id = $1", postId)
 	if err != nil {
 		http.Error(w, "Error while getting post", http.StatusInternalServerError)
 		log.Println(err)
