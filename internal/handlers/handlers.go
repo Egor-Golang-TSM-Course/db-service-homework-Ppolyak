@@ -311,7 +311,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 	}
 	var comment []Comment
 
-	err := Db.Select("SELECT * FROM comments WHERE post_id = $1", postId)
+	err := Db.Select(&comment, "SELECT * FROM comments WHERE post_id = $1", postId)
 	if err != nil {
 		http.Error(w, "Error while getting post", http.StatusInternalServerError)
 		log.Println(err)
