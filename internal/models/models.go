@@ -35,5 +35,5 @@ type Comment struct {
 type Tag struct {
 	ID      int    `db:"id"`
 	PostID  int    `db:"post_id"`
-	TagName string `db:"tag_name"`
+	TagName string `db:"tag_name" json:"tagName"`
 }

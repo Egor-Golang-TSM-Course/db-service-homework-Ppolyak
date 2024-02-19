@@ -325,3 +325,108 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 	}
 }
+
+func AddTag(w http.ResponseWriter, r *http.Request) {
+	var tag Tag
+	var post Post
+
+	vars := mux.Vars(r)
+	postId, ok := vars["postId"]
+	if !ok {
+		http.Error(w, "Post id is required", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+
+	defer r.Body.Close()
+
+	user := r.Context().Value("user").(*User)
+
+	err = Db.Get(&post, "SELECT * FROM posts WHERE ID = $1", postId)
+
+	if err := json.Unmarshal(body, &tag); err != nil {
+		http.Error(w, "Error while decoding JSON", http.StatusBadRequest)
+		return
+	}
+
+	if post.UserID != user.ID {
+		http.Error(w, "It's not your post", http.StatusUnauthorized)
+		return
+	}
+
+	if tag.TagName == "" {
+		http.Error(w, "Tag name can't be empty", http.StatusBadRequest)
+		return
+	}
+
+	_, err = Db.Exec("INSERT INTO tags (post_id, tag_name) VALUES ($1,$2)", postId, tag.TagName)
+	if err != nil {
+		http.Error(w, "Error while adding tag", http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(tag); err != nil {
+		log.Println("Error encoding JSON:", err)
+		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+	}
+
+}
+
+func GetTags(w http.ResponseWriter, r *http.Request) {
+	var tag []Tag
+	pageS := r.URL.Query().Get("page")
+	page, err := strconv.Atoi(pageS)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	pageQS := r.URL.Query().Get("pageQ")
+	pageQ, err := strconv.Atoi(pageQS)
+	if err != nil || pageQ < 1 {
+		pageQ = 10
+	}
+
+	offset := (page - 1) * pageQ
+
+	err = Db.Select(&tag, "SELECT * FROM tags LIMIT $1 OFFSET $2", pageQ, offset)
+	if err != nil {
+		http.Error(w, "Error while getting post", http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(tag); err != nil {
+		log.Println("Error encoding JSON:", err)
+		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+	}
+}
+
+func SearchForKeyWord(w http.ResponseWriter, r *http.Request) {
+	var posts []Post
+	keyword := r.URL.Query().Get("keyword")
+
+	query := "SELECT * FROM posts WHERE title LIKE '%' || $1 || '%' OR content LIKE '%' || $1 || '%'"
+	err := Db.Select(&posts, query, keyword)
+	if err != nil {
+		http.Error(w, "Error while searching posts", http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(posts); err != nil {
+		log.Println("Error encoding JSON:", err)
+		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+	}
+}
