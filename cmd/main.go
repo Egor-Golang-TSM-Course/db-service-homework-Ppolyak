@@ -29,8 +29,8 @@ func main() {
 	r.HandleFunc("/posts/{id}/comments", GetComments).Methods("GET")
 	//POST /posts/{postId}/tags
 	r.HandleFunc("/posts/{postId}/tags", AuthMiddleware(AddTag)).Methods("POST")
+	r.HandleFunc("/search", PostSearch).Methods("GET")
 	r.HandleFunc("/tags", GetTags).Methods("GET")
-	r.HandleFunc("/posts/search", SearchForKeyWord).Methods("GET")
 	port := ":6262"
 	fmt.Printf("Сервер запущен на порту %s...\n", port)
 

@@ -411,18 +411,18 @@ func GetTags(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func SearchForKeyWord(w http.ResponseWriter, r *http.Request) {
+func PostSearch(w http.ResponseWriter, r *http.Request) {
 	var posts []Post
-	keyword := r.URL.Query().Get("keyword")
+	word := r.URL.Query().Get("word")
 
 	query := "SELECT * FROM posts WHERE title LIKE '%' || $1 || '%' OR content LIKE '%' || $1 || '%'"
-	err := Db.Select(&posts, query, keyword)
+	err := Db.Select(&posts, query, word)
 	if err != nil {
-		http.Error(w, "Error while searching posts", http.StatusInternalServerError)
+		http.Error(w, "Error while getting post", http.StatusInternalServerError)
 		log.Println(err)
 		return
 	}
-
+	log.Println("REQ")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(posts); err != nil {
