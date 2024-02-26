@@ -28,10 +28,16 @@ func NewPostgres() (*PostgresDB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	return &PostgresDB{db: db}, nil
+	p := &PostgresDB{db: db}
+	err = p.MigrateDb()
+	if err != nil {
+		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	}
+
+	return p, nil
 }
 
-func (p *PostgresDB) migrateDb() error {
+func (p *PostgresDB) MigrateDb() error {
 	queryDrop := `DROP TABLE IF EXISTS users, session_storage, comments, posts, tags`
 
 	queriesCreate := []string{
