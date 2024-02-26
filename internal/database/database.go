@@ -2,8 +2,9 @@ package internal
 
 import (
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	"log"
+
+	"github.com/jmoiron/sqlx"
 )
 
 const (
@@ -14,22 +15,23 @@ const (
 	dbname   = "postgres"
 )
 
-var Db *sqlx.DB
+type PostgresDB struct {
+	db *sqlx.DB
+}
 
-func NewPostgres() {
+func NewPostgres() (*PostgresDB, error) {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
-	var err error
-	Db, err = sqlx.Connect("postgres", psqlInfo)
+	db, err := sqlx.Connect("postgres", psqlInfo)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	migrateDb()
+	return &PostgresDB{db: db}, nil
 }
 
-func migrateDb() {
+func (p *PostgresDB) migrateDb() error {
 	queryDrop := `DROP TABLE IF EXISTS users, session_storage, comments, posts, tags`
 
 	queriesCreate := []string{
@@ -67,18 +69,19 @@ func migrateDb() {
 		)`,
 	}
 
-	_, err := Db.Exec(queryDrop)
+	_, err := p.db.Exec(queryDrop)
 	if err != nil {
-		log.Fatal("Error while dropping tables")
+		return fmt.Errorf("error while dropping tables: %w", err)
 	}
 
 	for _, q := range queriesCreate {
-		_, err := Db.Exec(q)
+		_, err := p.db.Exec(q)
 		if err != nil {
 			log.Println(err)
 		}
 	}
 
-	log.Println("MIRGATION FINISHED")
+	log.Println("Migration finished")
 
+	return nil
 }
